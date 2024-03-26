@@ -1,0 +1,25 @@
+{
+  "name": "runtime-bump-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node -r ts-node/register --env-file=./.env src/index.ts",
+    "check": "biome ci src",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "git config --local core.hooksPath .githooks"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@biomejs/biome": "1.6.2",
+    "@types/node": "^20.11.30",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.3"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.2",
+    "superstruct": "^1.0.4"
+  }
+}
