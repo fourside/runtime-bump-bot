@@ -43,7 +43,7 @@ export async function createBranch({
   });
 }
 
-type GetContentParams = {
+type GetContentsParams = {
   owner: string;
   repo: string;
   path: string;
@@ -60,7 +60,7 @@ export async function getContents({
   repo,
   path,
   ref,
-}: GetContentParams): Promise<FileContentData[]> {
+}: GetContentsParams): Promise<FileContentData[]> {
   const { data } = await octokit.repos.getContent({
     owner,
     repo,
@@ -71,12 +71,32 @@ export async function getContents({
     const contents = await Promise.all(
       data.flatMap((it) => getContents({ owner, repo, path: it.path, ref })),
     );
-
-    console.log("data is array", contents.flat());
     return contents.flat();
   }
   if (data.type !== "file") {
     return [];
   }
   return [data];
+}
+
+type SearchContentsParams = {
+  owner: string;
+  repo: string;
+  ref: string;
+  filename: string;
+};
+
+export async function searchContents({
+  owner,
+  repo,
+  ref,
+  filename,
+}: SearchContentsParams): Promise<FileContentData[]> {
+  const { data } = await octokit.search.code({
+    q: `filename:${filename} repo:${owner}/${repo}`,
+  });
+  const result = await Promise.all(
+    data.items.map((it) => getContents({ owner, repo, path: it.path, ref })),
+  );
+  return result.flat();
 }
