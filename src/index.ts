@@ -4,7 +4,14 @@ import {
   fetchDebianCycles,
   fetchNodeCycles,
 } from "./fetch-cycles";
-import { getContents, getSha, searchContents } from "./github";
+import {
+  type TreeObject,
+  commitAndPush,
+  createBlob,
+  getContents,
+  getSha,
+  searchContents,
+} from "./github";
 import {
   Dockerfile,
   GitHubActions,
@@ -13,15 +20,15 @@ import {
 } from "./target-file";
 
 async function main(): Promise<void> {
-  const [latestNode, latestDebian] = await Promise.all([
+  const [latestNode, livingDebians] = await Promise.all([
     fetchLatestNodeLTS(),
-    fetchLatestDebian(),
+    fetchLivingDebians(),
   ]);
-  // console.log({ latestNode, latestDebian });
 
   const owner = "fourside";
   const repo = "podcast-lambda";
   const baseBranch = "main";
+  const newBranch = "bump";
 
   const baseSha = await getSha({ owner, repo, branch: baseBranch });
 
@@ -30,19 +37,41 @@ async function main(): Promise<void> {
       getTargetFileContents(it, owner, repo, baseSha),
     ),
   );
+  const nodeTreeObjects: TreeObject[] = [];
   for (const content of targetFileContentsList.flat()) {
-    const getVersions =
+    const targetFile =
       content.type === "nvm"
-        ? Nvm.getNodeVersions
+        ? Nvm
         : content.type === "GitHub Actions"
-          ? GitHubActions.getNodeVersions
-          : Dockerfile.getNodeVersions;
-    const versions = getVersions(content.content);
-    if (versions.length === 0) {
-      continue;
+          ? GitHubActions
+          : Dockerfile;
+    const versions = targetFile.getNodeVersions(content.content);
+    if (isNodeUpdatable(versions, latestNode)) {
+      const newContent = targetFile.updateNode(
+        content.content,
+        latestNode.cycle,
+      );
+      const treeObject = await createBlob({
+        owner,
+        repo,
+        content: newContent,
+        path: content.path,
+      });
+      nodeTreeObjects.push(treeObject);
     }
-    console.log({ path: content.path, versions });
   }
+
+  if (nodeTreeObjects.length > 0) {
+    await commitAndPush({
+      owner,
+      repo,
+      branch: newBranch,
+      tree: nodeTreeObjects,
+      baseSha,
+      message: "update node version",
+    });
+  }
+  // debian update
 }
 
 async function fetchLatestNodeLTS(): Promise<NodeCycle> {
@@ -53,10 +82,10 @@ async function fetchLatestNodeLTS(): Promise<NodeCycle> {
   return sorted[0];
 }
 
-async function fetchLatestDebian(): Promise<DebianCycle> {
+async function fetchLivingDebians(): Promise<DebianCycle[]> {
   const now = new Date();
   const cycles = await fetchDebianCycles();
-  const sorted = cycles
+  return cycles
     .flatMap((it) => {
       if (typeof it.eol === "boolean") {
         return [];
@@ -65,7 +94,6 @@ async function fetchLatestDebian(): Promise<DebianCycle> {
       return eol.getTime() > now.getTime() ? [it] : [];
     })
     .sort((a, b) => Number.parseInt(b.cycle) - Number.parseInt(a.cycle));
-  return sorted[0];
 }
 
 type TargetFileContent = {
@@ -110,8 +138,41 @@ async function getTargetFileContents(
       };
     });
   }
-  // TODO: exhaustive
+  assertNerver(targetFile);
   return [];
+}
+
+function isNodeUpdatable(versions: string[], latest: NodeCycle): boolean {
+  if (versions.length === 0) {
+    return false;
+  }
+  const uniqued = Array.from(new Set(versions));
+  if (uniqued.length > 1) {
+    return true;
+  }
+  return Number.parseInt(uniqued[0]) < Number.parseInt(latest.cycle);
+}
+
+function isDebianUpdatable(
+  versions: string[],
+  livings: DebianCycle[], // sorted
+): boolean {
+  const uniqued = Array.from(new Set(versions));
+  if (uniqued.length > 1) {
+    return true;
+  }
+  const current = uniqued[0];
+  const found = livings.find(
+    (it) => it.codename.toLocaleLowerCase() === current.toLocaleLowerCase(),
+  );
+  if (found === undefined) {
+    return true;
+  }
+  return Number.parseInt(found.cycle) < Number.parseInt(livings[0].cycle);
+}
+
+function assertNerver(x: never) {
+  throw new Error(x);
 }
 
 (async () => {

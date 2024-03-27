@@ -100,3 +100,130 @@ export async function searchContents({
   );
   return result.flat();
 }
+
+type CreateBlobParams = {
+  owner: string;
+  repo: string;
+  content: string;
+  path: string;
+};
+
+export async function createBlob({
+  owner,
+  repo,
+  content,
+  path,
+}: CreateBlobParams): Promise<TreeObject> {
+  const encoded = Buffer.from(content).toString("base64");
+  const { data } = await octokit.git.createBlob({
+    owner,
+    repo,
+    content: encoded,
+    encoding: "base64",
+  });
+  return {
+    type: "blob",
+    mode: "100644",
+    path,
+    sha: data.sha,
+  };
+}
+
+export type TreeObject =
+  RestEndpointMethodTypes["git"]["createTree"]["parameters"]["tree"][0];
+
+type CreateTreeParams = {
+  owner: string;
+  repo: string;
+  tree: TreeObject[];
+  baseSha: string;
+};
+
+async function createTree({
+  owner,
+  repo,
+  tree,
+  baseSha,
+}: CreateTreeParams): Promise<string> {
+  const { data } = await octokit.git.createTree({
+    owner,
+    repo,
+    tree,
+    base_tree: baseSha,
+  });
+  return data.sha;
+}
+
+type CreateCommitParams = {
+  owner: string;
+  repo: string;
+  message: string;
+  treeSha: string;
+  parentSha: string;
+};
+
+async function createCommit({
+  owner,
+  repo,
+  message,
+  treeSha,
+  parentSha,
+}: CreateCommitParams): Promise<string> {
+  const { data } = await octokit.git.createCommit({
+    owner,
+    repo,
+    message,
+    tree: treeSha,
+    parents: [parentSha],
+  });
+  return data.sha;
+}
+
+type PushCommitParams = {
+  owner: string;
+  repo: string;
+  branch: string;
+  commitSha: string;
+};
+
+async function pushCommit({
+  owner,
+  repo,
+  branch,
+  commitSha,
+}: PushCommitParams): Promise<void> {
+  await octokit.git.updateRef({
+    owner,
+    repo,
+    ref: `refs/heads/${branch}`,
+    sha: commitSha,
+  });
+}
+
+type CommitAndPushParams = {
+  owner: string;
+  repo: string;
+  branch: string;
+  tree: TreeObject[];
+  message: string;
+  baseSha: string;
+};
+
+export async function commitAndPush({
+  owner,
+  repo,
+  branch,
+  tree,
+  message,
+  baseSha,
+}: CommitAndPushParams) {
+  const treeSha = await createTree({ owner, repo, baseSha, tree });
+  const commitSha = await createCommit({
+    owner,
+    repo,
+    message,
+    parentSha: baseSha,
+    treeSha,
+  });
+  await pushCommit({ owner, repo, branch, commitSha });
+}
