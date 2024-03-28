@@ -23,16 +23,44 @@ import {
 } from "./target-file";
 
 async function main(): Promise<void> {
-  const [latestNode, livingDebians] = await Promise.all([
-    fetchLatestNodeLTS(),
-    fetchLivingDebians(),
-  ]);
-
   const owner = "fourside";
   const repo = "podcast-lambda";
   const baseBranch = "main";
   const newBranch = "bump";
 
+  const updated = await updateNode(owner, repo, baseBranch, newBranch);
+  await updateDebian(owner, repo, baseBranch, newBranch, updated);
+}
+
+async function fetchLatestNodeLTS(): Promise<NodeCycle> {
+  const cycles = await fetchNodeCycles();
+  const sorted = cycles
+    .filter((it) => typeof it.lts !== "boolean")
+    .sort((a, b) => (a.lts > b.lts ? -1 : 1));
+  return sorted[0];
+}
+
+async function fetchLivingDebians(): Promise<DebianCycle[]> {
+  const now = new Date();
+  const cycles = await fetchDebianCycles();
+  return cycles
+    .flatMap((it) => {
+      if (typeof it.eol === "boolean") {
+        return [];
+      }
+      const eol = new Date(Date.parse(it.eol));
+      return eol.getTime() > now.getTime() ? [it] : [];
+    })
+    .sort((a, b) => Number.parseInt(b.cycle) - Number.parseInt(a.cycle));
+}
+
+async function updateNode(
+  owner: string,
+  repo: string,
+  baseBranch: string,
+  newBranch: string,
+): Promise<boolean> {
+  const latestNode = await fetchLatestNodeLTS();
   const baseSha = await getSha({ owner, repo, branch: baseBranch });
 
   const targetFileContents = (
@@ -57,40 +85,67 @@ async function main(): Promise<void> {
     },
   );
 
-  if (updatedContents.length > 0) {
-    await createBranch({ owner, repo, branch: newBranch, sha: baseSha });
-    await commitAndPush({
-      owner,
-      repo,
-      branch: newBranch,
-      updatedContents,
-      baseSha,
-      message: "update node version",
-    });
+  if (updatedContents.length === 0) {
+    return false;
   }
-  // debian update
+
+  await createBranch({ owner, repo, branch: newBranch, sha: baseSha });
+  await commitAndPush({
+    owner,
+    repo,
+    branch: newBranch,
+    updatedContents,
+    baseSha,
+    message: "update node version",
+  });
+
+  return true;
 }
 
-async function fetchLatestNodeLTS(): Promise<NodeCycle> {
-  const cycles = await fetchNodeCycles();
-  const sorted = cycles
-    .filter((it) => typeof it.lts !== "boolean")
-    .sort((a, b) => (a.lts > b.lts ? -1 : 1));
-  return sorted[0];
-}
+async function updateDebian(
+  owner: string,
+  repo: string,
+  baseBranch: string,
+  newBranch: string,
+  updated: boolean,
+): Promise<void> {
+  const livingDebians = await fetchLivingDebians();
+  const sha = await getSha({
+    owner,
+    repo,
+    branch: updated ? newBranch : baseBranch,
+  });
 
-async function fetchLivingDebians(): Promise<DebianCycle[]> {
-  const now = new Date();
-  const cycles = await fetchDebianCycles();
-  return cycles
-    .flatMap((it) => {
-      if (typeof it.eol === "boolean") {
-        return [];
-      }
-      const eol = new Date(Date.parse(it.eol));
-      return eol.getTime() > now.getTime() ? [it] : [];
-    })
-    .sort((a, b) => Number.parseInt(b.cycle) - Number.parseInt(a.cycle));
+  const contents = await getTargetFileContents(Dockerfile, owner, repo, sha);
+  const updatedContents = contents.flatMap((it) => {
+    const versions = Dockerfile.getDebianVersions(it.content);
+    if (!isDebianUpdatable(versions, livingDebians)) {
+      return [];
+    }
+    const newContent = Dockerfile.updateDebian(
+      it.content,
+      livingDebians[livingDebians.length - 1].codename,
+    );
+    return {
+      content: newContent,
+      path: it.path,
+    };
+  });
+  if (updatedContents.length === 0) {
+    return;
+  }
+
+  if (!updated) {
+    await createBranch({ owner, repo, branch: newBranch, sha });
+  }
+  await commitAndPush({
+    owner,
+    repo,
+    branch: newBranch,
+    updatedContents,
+    baseSha: sha,
+    message: "update debian version",
+  });
 }
 
 function getTargetFileType(type: TargetFileType["type"]): TargetFileType {
@@ -164,7 +219,7 @@ function isNodeUpdatable(versions: string[], latest: NodeCycle): boolean {
 
 function isDebianUpdatable(
   versions: string[],
-  livings: DebianCycle[], // sorted
+  livings: DebianCycle[],
 ): boolean {
   const uniqued = Array.from(new Set(versions));
   if (uniqued.length > 1) {
@@ -174,10 +229,7 @@ function isDebianUpdatable(
   const found = livings.find(
     (it) => it.codename.toLocaleLowerCase() === current.toLocaleLowerCase(),
   );
-  if (found === undefined) {
-    return true;
-  }
-  return Number.parseInt(found.cycle) < Number.parseInt(livings[0].cycle);
+  return found === undefined;
 }
 
 type UpdatedContent = {
