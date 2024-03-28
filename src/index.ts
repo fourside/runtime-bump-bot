@@ -35,14 +35,14 @@ async function main(): Promise<void> {
 
   const baseSha = await getSha({ owner, repo, branch: baseBranch });
 
-  const targetFileContentsList = (
+  const targetFileContents = (
     await Promise.all(
       [Nvm, GitHubActions, Dockerfile].map((it) =>
         getTargetFileContents(it, owner, repo, baseSha),
       ),
     )
   ).flat();
-  const updatedContents = targetFileContentsList.flatMap<UpdatedContent>(
+  const updatedContents = targetFileContents.flatMap<UpdatedContent>(
     (content) => {
       const targetFile = getTargetFileType(content.type);
       const versions = targetFile.getNodeVersions(content.content);
