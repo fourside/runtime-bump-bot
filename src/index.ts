@@ -39,12 +39,7 @@ async function main(): Promise<void> {
   );
   const nodeTreeObjects: TreeObject[] = [];
   for (const content of targetFileContentsList.flat()) {
-    const targetFile =
-      content.type === "nvm"
-        ? Nvm
-        : content.type === "GitHub Actions"
-          ? GitHubActions
-          : Dockerfile;
+    const targetFile = getTargetFileType(content.type);
     const versions = targetFile.getNodeVersions(content.content);
     if (isNodeUpdatable(versions, latestNode)) {
       const newContent = targetFile.updateNode(
@@ -96,6 +91,19 @@ async function fetchLivingDebians(): Promise<DebianCycle[]> {
     .sort((a, b) => Number.parseInt(b.cycle) - Number.parseInt(a.cycle));
 }
 
+function getTargetFileType(type: TargetFileType["type"]): TargetFileType {
+  switch (type) {
+    case "nvm":
+      return Nvm;
+    case "GitHub Actions":
+      return GitHubActions;
+    case "Docker":
+      return Dockerfile;
+    default:
+      throw new Error(`invalid type: ${type}`);
+  }
+}
+
 type TargetFileContent = {
   type: TargetFileType["type"];
   path: string;
@@ -138,8 +146,7 @@ async function getTargetFileContents(
       };
     });
   }
-  assertNerver(targetFile);
-  return [];
+  throw new Error(`invalid TargetFile: ${targetFile}`);
 }
 
 function isNodeUpdatable(versions: string[], latest: NodeCycle): boolean {
