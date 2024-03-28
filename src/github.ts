@@ -105,15 +105,13 @@ type CreateBlobParams = {
   owner: string;
   repo: string;
   content: string;
-  path: string;
 };
 
 export async function createBlob({
   owner,
   repo,
   content,
-  path,
-}: CreateBlobParams): Promise<TreeObject> {
+}: CreateBlobParams): Promise<string> {
   const encoded = Buffer.from(content).toString("base64");
   const { data } = await octokit.git.createBlob({
     owner,
@@ -121,12 +119,7 @@ export async function createBlob({
     content: encoded,
     encoding: "base64",
   });
-  return {
-    type: "blob",
-    mode: "100644",
-    path,
-    sha: data.sha,
-  };
+  return data.sha;
 }
 
 export type TreeObject =
@@ -139,7 +132,7 @@ type CreateTreeParams = {
   baseSha: string;
 };
 
-async function createTree({
+export async function createTree({
   owner,
   repo,
   tree,
@@ -162,7 +155,7 @@ type CreateCommitParams = {
   parentSha: string;
 };
 
-async function createCommit({
+export async function createCommit({
   owner,
   repo,
   message,
@@ -186,7 +179,7 @@ type PushCommitParams = {
   commitSha: string;
 };
 
-async function pushCommit({
+export async function pushCommit({
   owner,
   repo,
   branch,
@@ -198,32 +191,4 @@ async function pushCommit({
     ref: `refs/heads/${branch}`,
     sha: commitSha,
   });
-}
-
-type CommitAndPushParams = {
-  owner: string;
-  repo: string;
-  branch: string;
-  tree: TreeObject[];
-  message: string;
-  baseSha: string;
-};
-
-export async function commitAndPush({
-  owner,
-  repo,
-  branch,
-  tree,
-  message,
-  baseSha,
-}: CommitAndPushParams) {
-  const treeSha = await createTree({ owner, repo, baseSha, tree });
-  const commitSha = await createCommit({
-    owner,
-    repo,
-    message,
-    parentSha: baseSha,
-    treeSha,
-  });
-  await pushCommit({ owner, repo, branch, commitSha });
 }

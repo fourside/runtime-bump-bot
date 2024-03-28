@@ -6,10 +6,13 @@ import {
 } from "./fetch-cycles";
 import {
   type TreeObject,
-  commitAndPush,
   createBlob,
+  createBranch,
+  createCommit,
+  createTree,
   getContents,
   getSha,
+  pushCommit,
   searchContents,
 } from "./github";
 import {
@@ -32,36 +35,35 @@ async function main(): Promise<void> {
 
   const baseSha = await getSha({ owner, repo, branch: baseBranch });
 
-  const targetFileContentsList = await Promise.all(
-    [Nvm, GitHubActions, Dockerfile].map((it) =>
-      getTargetFileContents(it, owner, repo, baseSha),
-    ),
-  );
-  const nodeTreeObjects: TreeObject[] = [];
-  for (const content of targetFileContentsList.flat()) {
-    const targetFile = getTargetFileType(content.type);
-    const versions = targetFile.getNodeVersions(content.content);
-    if (isNodeUpdatable(versions, latestNode)) {
+  const targetFileContentsList = (
+    await Promise.all(
+      [Nvm, GitHubActions, Dockerfile].map((it) =>
+        getTargetFileContents(it, owner, repo, baseSha),
+      ),
+    )
+  ).flat();
+  const updatedContents = targetFileContentsList.flatMap<UpdatedContent>(
+    (content) => {
+      const targetFile = getTargetFileType(content.type);
+      const versions = targetFile.getNodeVersions(content.content);
+      if (!isNodeUpdatable(versions, latestNode)) {
+        return [];
+      }
       const newContent = targetFile.updateNode(
         content.content,
         latestNode.cycle,
       );
-      const treeObject = await createBlob({
-        owner,
-        repo,
-        content: newContent,
-        path: content.path,
-      });
-      nodeTreeObjects.push(treeObject);
-    }
-  }
+      return [{ content: newContent, path: content.path }];
+    },
+  );
 
-  if (nodeTreeObjects.length > 0) {
+  if (updatedContents.length > 0) {
+    await createBranch({ owner, repo, branch: newBranch, sha: baseSha });
     await commitAndPush({
       owner,
       repo,
       branch: newBranch,
-      tree: nodeTreeObjects,
+      updatedContents,
       baseSha,
       message: "update node version",
     });
@@ -178,8 +180,48 @@ function isDebianUpdatable(
   return Number.parseInt(found.cycle) < Number.parseInt(livings[0].cycle);
 }
 
-function assertNerver(x: never) {
-  throw new Error(x);
+type UpdatedContent = {
+  content: string;
+  path: string;
+};
+
+type CommitAndPushParams = {
+  owner: string;
+  repo: string;
+  branch: string;
+  updatedContents: UpdatedContent[];
+  message: string;
+  baseSha: string;
+};
+
+export async function commitAndPush({
+  owner,
+  repo,
+  updatedContents,
+  branch,
+  message,
+  baseSha,
+}: CommitAndPushParams) {
+  const tree = await Promise.all(
+    updatedContents.map<Promise<TreeObject>>(async (it) => {
+      const blobSha = await createBlob({ owner, repo, content: it.content });
+      return {
+        type: "blob",
+        mode: "100644",
+        path: it.path,
+        sha: blobSha,
+      };
+    }),
+  );
+  const treeSha = await createTree({ owner, repo, baseSha, tree });
+  const commitSha = await createCommit({
+    owner,
+    repo,
+    message,
+    parentSha: baseSha,
+    treeSha,
+  });
+  await pushCommit({ owner, repo, branch, commitSha });
 }
 
 (async () => {
