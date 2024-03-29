@@ -50,7 +50,7 @@ type GetContentsParams = {
   ref: string;
 };
 
-type FileContentData = Extract<
+export type FileContentData = Extract<
   RestEndpointMethodTypes["repos"]["getContent"]["response"]["data"],
   { type: "file" }
 >;

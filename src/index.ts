@@ -1,11 +1,7 @@
 import { cli } from "./cli";
+import { fetchDebianCycles, fetchNodeCycles } from "./fetch-cycles";
 import {
-  type DebianCycle,
-  type NodeCycle,
-  fetchDebianCycles,
-  fetchNodeCycles,
-} from "./fetch-cycles";
-import {
+  type FileContentData,
   type TreeObject,
   createBlob,
   createBranch,
@@ -16,6 +12,12 @@ import {
   pushCommit,
   searchContents,
 } from "./github";
+import {
+  filterLatestLTSNode,
+  filterLivingDebians,
+  isDebianUpdatable,
+  isNodeUpdatable,
+} from "./is-updatable";
 import {
   Dockerfile,
   GitHubActions,
@@ -31,35 +33,14 @@ async function main(): Promise<void> {
   await updateDebian(owner, repo, baseBranch, workingBranch, updated);
 }
 
-async function fetchLatestNodeLTS(): Promise<NodeCycle> {
-  const cycles = await fetchNodeCycles();
-  const sorted = cycles
-    .filter((it) => typeof it.lts !== "boolean")
-    .sort((a, b) => (a.lts > b.lts ? -1 : 1));
-  return sorted[0];
-}
-
-async function fetchLivingDebians(): Promise<DebianCycle[]> {
-  const now = new Date();
-  const cycles = await fetchDebianCycles();
-  return cycles
-    .flatMap((it) => {
-      if (typeof it.eol === "boolean") {
-        return [];
-      }
-      const eol = new Date(Date.parse(it.eol));
-      return eol.getTime() > now.getTime() ? [it] : [];
-    })
-    .sort((a, b) => Number.parseInt(b.cycle) - Number.parseInt(a.cycle));
-}
-
 async function updateNode(
   owner: string,
   repo: string,
   baseBranch: string,
   workingBranch: string,
 ): Promise<boolean> {
-  const latestNode = await fetchLatestNodeLTS();
+  const nodeCycles = await fetchNodeCycles();
+  const latestNode = filterLatestLTSNode(nodeCycles);
   const baseSha = await getSha({ owner, repo, branch: baseBranch });
 
   const targetFileContents = (
@@ -108,7 +89,8 @@ async function updateDebian(
   workingBranch: string,
   updated: boolean,
 ): Promise<void> {
-  const livingDebians = await fetchLivingDebians();
+  const debianCycles = await fetchDebianCycles();
+  const livingDebians = filterLivingDebians(debianCycles);
   const sha = await getSha({
     owner,
     repo,
@@ -166,13 +148,7 @@ async function getTargetFileContents(
       path: targetFile.path,
       ref,
     });
-    return contents.map((it) => {
-      return {
-        type: targetFile.type,
-        path: it.path,
-        content: Buffer.from(it.content, "base64").toString("utf-8"),
-      };
-    });
+    return contents.map((it) => mapFileContentData(targetFile.type, it));
   }
   if (targetFile.type === "Docker") {
     const contents = await searchContents({
@@ -181,41 +157,20 @@ async function getTargetFileContents(
       filename: Dockerfile.path,
       ref,
     });
-    return contents.map((it) => {
-      return {
-        type: targetFile.type,
-        path: it.path,
-        content: Buffer.from(it.content, "base64").toString("utf-8"),
-      };
-    });
+    return contents.map((it) => mapFileContentData(targetFile.type, it));
   }
   throw new Error(`invalid TargetFile: ${targetFile}`);
 }
 
-function isNodeUpdatable(versions: string[], latest: NodeCycle): boolean {
-  if (versions.length === 0) {
-    return false;
-  }
-  const uniqued = Array.from(new Set(versions));
-  if (uniqued.length > 1) {
-    return true;
-  }
-  return Number.parseInt(uniqued[0]) < Number.parseInt(latest.cycle);
-}
-
-function isDebianUpdatable(
-  versions: string[],
-  livings: DebianCycle[],
-): boolean {
-  const uniqued = Array.from(new Set(versions));
-  if (uniqued.length > 1) {
-    return true;
-  }
-  const current = uniqued[0];
-  const found = livings.find(
-    (it) => it.codename.toLocaleLowerCase() === current.toLocaleLowerCase(),
-  );
-  return found === undefined;
+function mapFileContentData(
+  type: TargetFileType["type"],
+  data: FileContentData,
+): TargetFileContent {
+  return {
+    type,
+    path: data.path,
+    content: Buffer.from(data.content, "base64").toString("utf-8"),
+  };
 }
 
 type UpdatedContent = {
