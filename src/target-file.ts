@@ -30,7 +30,7 @@ export const Nvm: NvmType = {
     return [content.trim()];
   },
   updateNode: (content, newVersion) => {
-    return content.replace(/^.+$/, newVersion);
+    return content.replace(/^.+$/m, newVersion);
   },
 };
 
@@ -73,6 +73,24 @@ export const Dockerfile: DockerType = {
     return result.map((it) => it[1]);
   },
   updateDebian: (content, newVersion) => {
-    return content.replace(/(?<=FROM .+?-).+?-/gi, `${newVersion}-`);
+    return content.replace(
+      /(?<=FROM .+?-).+?(?=[- ])/gi,
+      `${newVersion.toLocaleLowerCase()}`,
+    );
   },
 };
+
+export function getTargetFileType(
+  type: TargetFileType["type"],
+): TargetFileType {
+  switch (type) {
+    case "nvm":
+      return Nvm;
+    case "GitHub Actions":
+      return GitHubActions;
+    case "Docker":
+      return Dockerfile;
+    default:
+      throw new Error(`invalid type: ${type}`);
+  }
+}

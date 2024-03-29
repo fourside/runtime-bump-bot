@@ -21,6 +21,7 @@ import {
   GitHubActions,
   Nvm,
   type TargetFileType,
+  getTargetFileType,
 } from "./target-file";
 
 async function main(): Promise<void> {
@@ -144,19 +145,6 @@ async function updateDebian(
     baseSha: sha,
     message: "update debian version",
   });
-}
-
-function getTargetFileType(type: TargetFileType["type"]): TargetFileType {
-  switch (type) {
-    case "nvm":
-      return Nvm;
-    case "GitHub Actions":
-      return GitHubActions;
-    case "Docker":
-      return Dockerfile;
-    default:
-      throw new Error(`invalid type: ${type}`);
-  }
 }
 
 type TargetFileContent = {

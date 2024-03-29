@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node -r ts-node/register --env-file=./.env src/index.ts",
     "check": "biome ci src",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest",
     "prepare": "git config --local core.hooksPath .githooks"
   },
   "keywords": [],
@@ -16,7 +16,8 @@
     "@biomejs/biome": "1.6.2",
     "@types/node": "^20.11.30",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.3"
+    "typescript": "^5.4.3",
+    "vitest": "^1.4.0"
   },
   "dependencies": {
     "@octokit/rest": "^20.0.2",
