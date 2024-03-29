@@ -1,3 +1,4 @@
+import { cli } from "./cli";
 import {
   type DebianCycle,
   type NodeCycle,
@@ -23,13 +24,10 @@ import {
 } from "./target-file";
 
 async function main(): Promise<void> {
-  const owner = "fourside";
-  const repo = "podcast-lambda";
-  const baseBranch = "main";
-  const newBranch = "bump";
+  const { owner, repo, base: baseBranch, working: workingBranch } = cli();
 
-  const updated = await updateNode(owner, repo, baseBranch, newBranch);
-  await updateDebian(owner, repo, baseBranch, newBranch, updated);
+  const updated = await updateNode(owner, repo, baseBranch, workingBranch);
+  await updateDebian(owner, repo, baseBranch, workingBranch, updated);
 }
 
 async function fetchLatestNodeLTS(): Promise<NodeCycle> {
@@ -58,7 +56,7 @@ async function updateNode(
   owner: string,
   repo: string,
   baseBranch: string,
-  newBranch: string,
+  workingBranch: string,
 ): Promise<boolean> {
   const latestNode = await fetchLatestNodeLTS();
   const baseSha = await getSha({ owner, repo, branch: baseBranch });
@@ -89,11 +87,11 @@ async function updateNode(
     return false;
   }
 
-  await createBranch({ owner, repo, branch: newBranch, sha: baseSha });
+  await createBranch({ owner, repo, branch: workingBranch, sha: baseSha });
   await commitAndPush({
     owner,
     repo,
-    branch: newBranch,
+    branch: workingBranch,
     updatedContents,
     baseSha,
     message: "update node version",
@@ -106,14 +104,14 @@ async function updateDebian(
   owner: string,
   repo: string,
   baseBranch: string,
-  newBranch: string,
+  workingBranch: string,
   updated: boolean,
 ): Promise<void> {
   const livingDebians = await fetchLivingDebians();
   const sha = await getSha({
     owner,
     repo,
-    branch: updated ? newBranch : baseBranch,
+    branch: updated ? workingBranch : baseBranch,
   });
 
   const contents = await getTargetFileContents(Dockerfile, owner, repo, sha);
@@ -136,12 +134,12 @@ async function updateDebian(
   }
 
   if (!updated) {
-    await createBranch({ owner, repo, branch: newBranch, sha });
+    await createBranch({ owner, repo, branch: workingBranch, sha });
   }
   await commitAndPush({
     owner,
     repo,
-    branch: newBranch,
+    branch: workingBranch,
     updatedContents,
     baseSha: sha,
     message: "update debian version",
