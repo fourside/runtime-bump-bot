@@ -192,3 +192,54 @@ export async function pushCommit({
     sha: commitSha,
   });
 }
+
+type CreatePullRequestParam = {
+  owner: string;
+  repo: string;
+  baseBranch: string;
+  headBranch: string;
+  title: string;
+  message: string;
+};
+
+export async function createPullRequest({
+  owner,
+  repo,
+  baseBranch,
+  headBranch,
+  title,
+  message,
+}: CreatePullRequestParam): Promise<void> {
+  await octokit.pulls.create({
+    owner,
+    repo,
+    base: baseBranch,
+    head: headBranch,
+    title,
+    body: message,
+  });
+}
+
+export function createPRTitleAndMessage(
+  nodeVersion: string | undefined,
+  debianCodename: string | undefined,
+): { title: string; message: string } {
+  if (nodeVersion === undefined && debianCodename === undefined) {
+    throw new Error("both node and debian undefined");
+  }
+  const title: string[] = [];
+  const message: string[] = [];
+  if (nodeVersion !== undefined) {
+    title.push(`Bump Node.js version to ${nodeVersion}`);
+    message.push(`- Bump Node.js version to ${nodeVersion}.`);
+  }
+  if (debianCodename !== undefined) {
+    title.push(`Bump Debian version to ${debianCodename}`);
+    message.push(`- Bump Debian version to ${debianCodename}.`);
+  }
+
+  return {
+    title: title.join(" / "),
+    message: message.join("\n"),
+  };
+}

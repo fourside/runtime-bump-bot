@@ -6,6 +6,8 @@ import {
   createBlob,
   createBranch,
   createCommit,
+  createPRTitleAndMessage,
+  createPullRequest,
   createTree,
   getContents,
   getSha,
@@ -30,16 +32,46 @@ import {
 async function main(): Promise<void> {
   const { owner, repo, base: baseBranch, working: workingBranch } = cli();
 
-  const updated = await updateNode(owner, repo, baseBranch, workingBranch);
-  await updateDebian(owner, repo, baseBranch, workingBranch, updated);
+  const updatedNodeResult = await updateNode(
+    owner,
+    repo,
+    baseBranch,
+    workingBranch,
+  );
+  const updatedDebianResult = await updateDebian(
+    owner,
+    repo,
+    baseBranch,
+    workingBranch,
+    updatedNodeResult.updated,
+  );
+  if (updatedNodeResult.updated || updatedDebianResult.updated) {
+    const { title, message } = createPRTitleAndMessage(
+      updatedNodeResult.version,
+      updatedDebianResult.version,
+    );
+    await createPullRequest({
+      owner,
+      repo,
+      baseBranch,
+      headBranch: workingBranch,
+      title,
+      message,
+    });
+  }
 }
+
+type UpdateResult = {
+  updated: boolean;
+  version?: string;
+};
 
 async function updateNode(
   owner: string,
   repo: string,
   baseBranch: string,
   workingBranch: string,
-): Promise<boolean> {
+): Promise<UpdateResult> {
   const nodeCycles = await fetchNodeCycles();
   const latestNode = filterLatestLTSNode(nodeCycles);
   const baseSha = await getSha({ owner, repo, branch: baseBranch });
@@ -67,7 +99,7 @@ async function updateNode(
   );
 
   if (updatedContents.length === 0) {
-    return false;
+    return { updated: false };
   }
 
   await createBranch({ owner, repo, branch: workingBranch, sha: baseSha });
@@ -80,7 +112,10 @@ async function updateNode(
     message: "update node version",
   });
 
-  return true;
+  return {
+    updated: true,
+    version: latestNode.cycle,
+  };
 }
 
 async function updateDebian(
@@ -89,7 +124,7 @@ async function updateDebian(
   baseBranch: string,
   workingBranch: string,
   updated: boolean,
-): Promise<void> {
+): Promise<UpdateResult> {
   const debianCycles = await fetchDebianCycles();
   const livingDebians = filterLivingDebians(debianCycles);
   const oldestDebian = getOldestDebian(livingDebians);
@@ -115,7 +150,7 @@ async function updateDebian(
     };
   });
   if (updatedContents.length === 0) {
-    return;
+    return { updated: false };
   }
 
   if (!updated) {
@@ -129,6 +164,10 @@ async function updateDebian(
     baseSha: sha,
     message: "update debian version",
   });
+  return {
+    updated: true,
+    version: oldestDebian.codename,
+  };
 }
 
 type TargetFileContent = {
