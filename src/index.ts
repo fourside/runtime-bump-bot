@@ -15,6 +15,7 @@ import {
 import {
   filterLatestLTSNode,
   filterLivingDebians,
+  getOldestDebian,
   isDebianUpdatable,
   isNodeUpdatable,
 } from "./is-updatable";
@@ -91,6 +92,7 @@ async function updateDebian(
 ): Promise<void> {
   const debianCycles = await fetchDebianCycles();
   const livingDebians = filterLivingDebians(debianCycles);
+  const oldestDebian = getOldestDebian(livingDebians);
   const sha = await getSha({
     owner,
     repo,
@@ -105,7 +107,7 @@ async function updateDebian(
     }
     const newContent = Dockerfile.updateDebian(
       it.content,
-      livingDebians[livingDebians.length - 1].codename,
+      oldestDebian.codename,
     );
     return {
       content: newContent,

@@ -51,3 +51,10 @@ export function filterLivingDebians(cycles: DebianCycle[]): DebianCycle[] {
     })
     .sort((a, b) => Number.parseInt(b.cycle) - Number.parseInt(a.cycle));
 }
+
+export function getOldestDebian(cycles: DebianCycle[]): DebianCycle {
+  const sorted = cycles.sort(
+    (a, b) => Number.parseInt(a.cycle) - Number.parseInt(b.cycle),
+  );
+  return sorted[0];
+}
