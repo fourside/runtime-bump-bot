@@ -23,8 +23,26 @@ steps:
       "asia-northeast1-docker.pkg.dev/${PROJECT_ID}/runtime-bump-bot/image:${SHORT_SHA}",
       "--region",
       "asia-northeast1",
-      "--schedule",
-      "'cron(0 0 * * 1)'"
+    ]
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args: [
+      "scheduler",
+      "jobs",
+      "create",
+      "http",
+      "runtime-bump-bot-schedule",
+      "--location",
+      "asia-northeast1",
+      "--schedule='cron(0 0 * * 1)'",
+      "--uri='https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/runtime-bump-bot:run'",
+      "--http-method",
+      "POST",
+      "--oauth-service-account-email",
+      "${PROJECT_NUMBER}-compute@developer.gserviceaccount.com",
+      "--region",
+      "asia-northeast1",
     ]
 
 availableSecrets:
