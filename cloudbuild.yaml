@@ -41,8 +41,6 @@ steps:
       "POST",
       "--oauth-service-account-email",
       "${PROJECT_NUMBER}-compute@developer.gserviceaccount.com",
-      "--region",
-      "asia-northeast1",
     ]
 
 availableSecrets:
