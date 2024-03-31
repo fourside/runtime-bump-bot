@@ -3,8 +3,11 @@ steps:
     args: [
       "build",
       "-t", "asia-northeast1-docker.pkg.dev/$PROJECT_ID/runtime-bump-bot/image:${SHORT_SHA}",
+      "--build-arg",
+      "PERSONAL_ACCESS_TOKEN=$PERSONAL_ACCESS_TOKEN",
        "."
     ]
+    secretEnv: ["PERSONAL_ACCESS_TOKEN"]
 
   - name: "gcr.io/cloud-builders/docker"
     args: ["push", "asia-northeast1-docker.pkg.dev/${PROJECT_ID}/runtime-bump-bot/image:${SHORT_SHA}"]
@@ -13,13 +16,21 @@ steps:
     entrypoint: gcloud
     args: [
       "run",
+      "jobs",
       "deploy",
       "runtime-bump-bot",
       "--image",
       "asia-northeast1-docker.pkg.dev/${PROJECT_ID}/runtime-bump-bot/image:${SHORT_SHA}",
       "--region",
-      "asia-northeast1"
+      "asia-northeast1",
+      "--schedule",
+      "'cron(0 0 * * 1)'"
     ]
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/${PROJECT_ID}/secrets/PERSONAL_ACCESS_TOKEN/versions/latest
+    env: PERSONAL_ACCESS_TOKEN
 
 images:
   - "asia-northeast1-docker.pkg.dev/${PROJECT_ID}/runtime-bump-bot/image:${SHORT_SHA}"
