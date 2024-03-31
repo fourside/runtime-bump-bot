@@ -36,7 +36,7 @@ steps:
       "--location",
       "asia-northeast1",
       "--schedule='cron(0 0 * * 1)'",
-      "--uri='https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/runtime-bump-bot:run'",
+      "--uri=https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/runtime-bump-bot:run",
       "--http-method",
       "POST",
       "--oauth-service-account-email",
