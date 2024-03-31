@@ -4,7 +4,7 @@ steps:
       "build",
       "-t", "asia-northeast1-docker.pkg.dev/$PROJECT_ID/runtime-bump-bot/image:${SHORT_SHA}",
       "--build-arg",
-      "PERSONAL_ACCESS_TOKEN=$PERSONAL_ACCESS_TOKEN",
+      "PERSONAL_ACCESS_TOKEN=$$PERSONAL_ACCESS_TOKEN",
        "."
     ]
     secretEnv: ["PERSONAL_ACCESS_TOKEN"]
